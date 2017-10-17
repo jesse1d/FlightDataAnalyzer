@@ -18722,6 +18722,3 @@ class DriftAtTouchdown(KeyPointValueNode):
 
     def derive(self, drift=P('Drift'), touchdown=KTI('Touchdown')):
         self.create_kpvs_at_ktis(drift.array, touchdown)
-
-
-       
