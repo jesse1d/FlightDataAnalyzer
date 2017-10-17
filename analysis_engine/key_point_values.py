@@ -18744,11 +18744,14 @@ class EngN1TakeoffDerate(KeyPointValueNode):
         return engine_series and engine_series.value == 'CFM56-5B' and all_deps(cls, available)
 
     def derive(self, eng_n1=P('Eng (*) N1 Avg'),
-               tat=P('TAT'), 
+               tat=P('TAT'), mach=P('Mach'),
                sage_toffs=KTI('SAGE Takeoff')):
 
         for toff in sage_toffs:
             index = toff.index
+            if mach.array[index] > 0.3:
+                # takeoff point mis-identified; ignore
+                continue
             n1 = eng_n1.array[index]
             if n1 < 85 or n1 > 100:
                 self.warning("Engine N1 '%s' outside range in takeoff derate computation", n1)

@@ -11205,10 +11205,10 @@ class TestEngN1TakeoffDerate(unittest.TestCase):
         
     def test_can_operate(self):
         self.assertFalse(self.node_class.can_operate([]))
-        self.assertFalse(self.node_class.can_operate(['Eng (*) N1 Avg', 'TAT', 'SAGE Takeoff']))
-        self.assertFalse(self.node_class.can_operate(['Eng (*) N1 Avg', 'TAT', 'SAGE Takeoff', 'Engine Series'],
+        self.assertFalse(self.node_class.can_operate(['Eng (*) N1 Avg', 'TAT', 'Mach', 'SAGE Takeoff']))
+        self.assertFalse(self.node_class.can_operate(['Eng (*) N1 Avg', 'TAT', 'Mach', 'SAGE Takeoff', 'Engine Series'],
                                                      A('Engine Series', value='RB199')))
-        self.assertTrue(self.node_class.can_operate(['Eng (*) N1 Avg', 'TAT', 'SAGE Takeoff', 'Engine Series'],
+        self.assertTrue(self.node_class.can_operate(['Eng (*) N1 Avg', 'TAT', 'Mach', 'SAGE Takeoff', 'Engine Series'],
                                                     A('Engine Series', value='CFM56-5B')))
         
     def test_derive(self):
@@ -11216,8 +11216,9 @@ class TestEngN1TakeoffDerate(unittest.TestCase):
                     items=[KeyTimeInstance(5, 'SAGE Takeoff')])
         eng_n1 = P('Eng (*) N1 Avg', array=np.ma.array([87.25]*10))
         tat = P('TAT', array=np.ma.array([39.5]*10))
+        mach = P('Mach', array=np.ma.array([0.22]*10))
         node = self.node_class()
-        node.derive(eng_n1, tat, toff)
+        node.derive(eng_n1, tat, mach, toff)
         self.assertEqual(len(node), 1)
         self.assertAlmostEqual(node[0].value, 16.24, places=2)
 
@@ -11228,6 +11229,16 @@ class TestEngN1TakeoffDerate(unittest.TestCase):
         tat = P('TAT', array=np.ma.array([39.5]*10))
         node = self.node_class()
         node.derive(eng_n1, tat, toff)
+        self.assertEqual(len(node), 0)
+
+    def test_overspeed(self):
+        toff =  KTI('SAGE Takeoff',
+                    items=[KeyTimeInstance(5, 'SAGE Takeoff')])
+        eng_n1 = P('Eng (*) N1 Avg', array=np.ma.array([87.25]*10))
+        tat = P('TAT', array=np.ma.array([39.5]*10))
+        mach = P('Mach', array=np.ma.array([0.32]*10))
+        node = self.node_class()
+        node.derive(eng_n1, tat, mach, toff)
         self.assertEqual(len(node), 0)
 
 
