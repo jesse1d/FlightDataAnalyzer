@@ -449,24 +449,23 @@ class AccelerationLateralOffset(KeyPointValueNode):
         AccelerationNormalOffset. The more complex slicing statement ensures we
         only accumulate error estimates when taxiing in a straight line.
         '''
-        total_sum = 0.0
-        total_count = 0
-        straights = slices_and(
-            [s.slice for s in list(taxiing)],
-            slices_not([s.slice for s in list(turns)]),
-        )
+        straights = slices_and([s.slice for s in list(taxiing)],
+            slices_not([s.slice for s in list(turns)]),)
+    
+        '''
+        Get the unmasked data within the taxiing in a straight line phase and
+        compute the average for this section(s) if there are enough samples.
+        '''    
+        unmasked_data = []
         for straight in straights:
-            unmasked_data = np.ma.compressed(acc_lat.array[straight])
-            count = len(unmasked_data)
-            if count:
-                total_count += count
-                total_sum += np.sum(unmasked_data)
-        if total_count > 20:
-            delta = total_sum / float(total_count)
+            unmasked_data.extend(np.ma.compressed(acc_lat.array[straight]))
+        if len(unmasked_data) > 20:
+            delta = np.sum(unmasked_data) / float(len(unmasked_data))
             self.create_kpv(0, delta)
             if abs(delta) > ACCEL_LAT_OFFSET_LIMIT:
                 self.warning("Acceleration Lateral offset '%s' greater than limit '%s'",
-                             delta, ACCEL_LAT_OFFSET_LIMIT)
+                             delta, ACCEL_LAT_OFFSET_LIMIT)            
+        
 
 class AccelerationLateralFor5SecMax(KeyPointValueNode):
     '''
@@ -495,12 +494,12 @@ class AccelerationLateralFor5SecMax(KeyPointValueNode):
 class AccelerationLongitudinalOffset(KeyPointValueNode):
     '''
     Longitudinal accelerometer datum offset.
-
+    
     We use all the taxiing phases and assume that
     the accelerations and decelerations will roughly balance out over the
     duration of the taxi phase.
     '''
-
+    
     units = ut.G
 
     def derive(self,
@@ -512,26 +511,27 @@ class AccelerationLongitudinalOffset(KeyPointValueNode):
         AccelerationNormalOffset. We use all the taxiing phase and assume that
         the accelerations and decelerations will roughly balance out over the
         duration of the taxi phase.
-    
+   
         Note: using mobile sections which are not Fast in place of taxiing in
         order to aviod circular dependancy with Taxiing, Rejected Takeoff and
         Acceleration Longitudinal Offset Removed
         '''
-        total_sum = 0.0
-        total_count = 0
+    
         taxis = slices_and_not(mobiles.get_slices(), fasts.get_slices())
+        
+        '''
+        Get the unmasked data within the taxis slices provided and compute
+        the average for this section(s) if there are enough samples.
+        '''        
+        unmasked_data = []
         for taxi in taxis:
-            unmasked_data = np.ma.compressed(acc_lon.array[taxi])
-            count = len(unmasked_data)
-            if count:
-                total_count += count
-                total_sum += np.sum(unmasked_data)
-        if total_count > 20:
-            delta = total_sum / float(total_count)
+            unmasked_data.extend(np.ma.compressed(acc_lon.array[taxi]))
+        if len(unmasked_data) > 20:
+            delta = np.sum(unmasked_data) / float(len(unmasked_data))        
             self.create_kpv(0, delta)
             if abs(delta) > ACCEL_LON_OFFSET_LIMIT:
                 self.warning("Acceleration Longitudinal offset '%s' greater than limit '%s'",
-                             delta, ACCEL_LON_OFFSET_LIMIT)
+                             delta, ACCEL_LON_OFFSET_LIMIT)            
 
 
 class AccelerationLongitudinalDuringTakeoffMax(KeyPointValueNode):
@@ -941,25 +941,25 @@ class AccelerationNormalOffset(KeyPointValueNode):
     @classmethod
     def can_operate(cls, available):
         return all_of(('Acceleration Normal', 'Taxiing'), available)
-
+    
     def derive(self,
                acc_norm=P('Acceleration Normal'),
                taxiing = S('Taxiing')):
-
-        total_sum = 0.0
-        total_count = 0
-        for taxi in taxiing:
-            unmasked_data = np.ma.compressed(acc_norm.array[taxi.slice])
-            count = len(unmasked_data)
-            if count:
-                total_count += count
-                total_sum += np.sum(unmasked_data)
-        if total_count > 20:
-            delta = total_sum / float(total_count) - 1.0
+        
+        '''
+        Get the unmasked data within the taxiing slices provided and compute
+        the average for this section(s) if there are enough samples.
+        '''        
+        unmasked_data = []
+        for taxi in taxiing.get_slices():
+            unmasked_data.extend(np.ma.compressed(acc_norm.array[taxi]))
+        if len(unmasked_data) > 20:
+            delta = np.sum(unmasked_data) / float(len(unmasked_data)) - 1.0
             self.create_kpv(0, delta + 1.0)
             if abs(delta) > ACCEL_NORM_OFFSET_LIMIT:
                 self.warning("Acceleration Normal offset '%s' greater than limit '%s'",
-                             delta, ACCEL_NORM_OFFSET_LIMIT)                
+                             delta, ACCEL_NORM_OFFSET_LIMIT)             
+
 
 class AccelerationNormalWhileAirborneMax(KeyPointValueNode):
     '''
@@ -5692,6 +5692,29 @@ class HeightAtRunwayChange(KeyPointValueNode):
                 if value:
                     self.create_kpv(index, value)
 
+class HeightSelectedOnApproachMin(KeyPointValueNode):
+    '''
+    This KPV detects the lowest altitude set on the Mode Control 
+    Panel (MCP) during an approach, in case the pilot inadvertently 
+    selects an altitude less than a safe approach height above 
+    the airfield. 
+    
+    If the pilot selects zero altitude the difference is negative, but
+    these are returned as KPV=0 as a setting at or below the airfield
+    elevation is equally dangerous, and not more dangerous at higher 
+    airports.
+    '''
+    
+    units = ut.FT
+    
+    def derive(self, alt_mcp=P('Altitude Selected (MCP)'),
+               apps=App('Approach Information')):
+        
+        for app in apps:
+            sel_ht = alt_mcp.array[app.slice] - app.airport['elevation']
+            sel_ht_index = np.ma.argmin(sel_ht)
+            sel_ht_value = max(sel_ht[sel_ht_index], 0.0)
+            self.create_kpv(sel_ht_index + app.slice.start, sel_ht_value)
 
 
 ##############################################################################
@@ -5920,8 +5943,8 @@ class AltitudeLastUnstableDuringLastApproachExcludingEngThrust(KeyPointValueNode
     stop landing.
     
     Unlike 'Altitude Last Unstable During Last Approach', this uses the 
-    multistae parameter 'Stable Approach Excluding Eng Trust' which
-    excludes the Engine Trust (N1/EPR) stability stage.
+    multistae parameter 'Stable Approach Excluding Eng Thrust' which
+    excludes the Engine Thrust (N1/EPR) stability stage.
 
     Should the approach have not become stable, the altitude will read 0 ft,
     indicating that it was unstable all the way to touchdown.
@@ -5929,7 +5952,7 @@ class AltitudeLastUnstableDuringLastApproachExcludingEngThrust(KeyPointValueNode
 
     units = ut.FT
 
-    def derive(self, stable=M('Stable Approach Excluding Eng Trust'),
+    def derive(self, stable=M('Stable Approach Excluding Eng Thrust'),
                alt=P('Altitude AAL')):
 
         apps = np.ma.clump_unmasked(stable.array)
@@ -7414,12 +7437,12 @@ class ILSLocalizerDeviation1500To1000FtMax(KeyPointValueNode):
                 max_abs_value)
 
 
-class ILSGlideslope10SecBeforeCapture(KeyPointValueNode):
+class ILSGlideslope10SecBeforeEstablished(KeyPointValueNode):
     '''
-    Glideslope dot value 10 seconds from glideslope capture.  
+    Glideslope dot value 10 seconds from glideslope established.  
     '''
 
-    name = 'ILS Glideslope 10 Sec Before Capture'
+    name = 'ILS Glideslope 10 Sec Before Established'
     units = ut.DOTS
     
     can_operate = aeroplane_only
@@ -8847,7 +8870,7 @@ class EngTorqueLimitExceedanceWithOneEngineInoperativeDuration(KeyPointValueNode
                 self.create_kpvs_from_slice_durations(phase_slices, self.frequency)
 
 
-class EngTorqueExceeding100(KeyPointValueNode):
+class EngTorqueExceeding100Percent(KeyPointValueNode):
     '''
     Measures the duration of Eng (*) Torque Avg exceeding 100. 
     '''
@@ -15296,17 +15319,14 @@ class Roll400To1000FtMax(KeyPointValueNode):
 
     def derive(self,
                roll=P('Roll'),
-               alt_aal=P('Altitude AAL For Flight Phases'),
-               init_climb=S('Initial Climb')):
+               alt_aal=P('Altitude AAL For Flight Phases')):
 
-        alt_band = np.ma.masked_outside(alt_aal.array, 400, 1000)
-        alt_climb_sections = valid_slices_within_array(alt_band, init_climb)
         self.create_kpvs_within_slices(
             roll.array,
-            alt_climb_sections,
+            alt_aal.slices_from_to(400, 1000),
             max_abs_value
         )
-
+        
 
 class RollAbove1000FtMax(KeyPointValueNode):
     '''
@@ -18725,7 +18745,6 @@ class DriftAtTouchdown(KeyPointValueNode):
 
     def derive(self, drift=P('Drift'), touchdown=KTI('Touchdown')):
         self.create_kpvs_at_ktis(drift.array, touchdown)
-
     
         
 ##############################################################################
@@ -18822,3 +18841,4 @@ class EngTakeoffFlexTemp(KeyPointValueNode):
                 index = toff.index
                 value = (flex_1.array[index] + flex_2.array[index]) / 2.0
                 self.create_kpv(index, value)
+
