@@ -11258,7 +11258,7 @@ class TestEngThrustTakeoffDerate(unittest.TestCase):
         node = self.node_class()
         node.derive(mach, eng_dr)
         self.assertEqual(len(node), 1)
-        self.assertAlmostEqual(node[0].value, 18.705, places=2)    
+        self.assertAlmostEqual(node[0].value, 21.093, places=2)    
 
 class TestEngTakeoffFlexTemp(unittest.TestCase):
     
