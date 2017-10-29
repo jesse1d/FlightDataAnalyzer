@@ -18791,20 +18791,12 @@ class EngThrustTakeoffDerate(KeyPointValueNode):
     def derive(self, mach=P('Mach'),
                n1_derates=KPV('Eng N1 Takeoff Derate')):
 
-        '''
         def corrected_parameter_power_management(corr_n1, mach_toff):
-            fnk = -34422.1945 \
-                - 3.591798057 * mach_toff \
-                - 221.3236997 * mach_toff * corr_n1 \
-                + 663.3754542 * corr_n1
-            return fnk
-            '''
-
-        def corrected_parameter_power_management(corr_n1, mach_toff):
-            fnk = -94788.17839 \
-                -20498.18134 * mach_toff \
-                -7.73249942 * corr_n1**2.0 \
-                + 2033.086108 * corr_n1 \
+            # See blog article about curve fitting
+            fnk = -94514.4 \
+                -20501.84 * mach_toff \
+                -7.7018523 * corr_n1**2.0 \
+                + 2027.295 * corr_n1 \
                 -0.01571593 * mach_toff * corr_n1
             return fnk
 
