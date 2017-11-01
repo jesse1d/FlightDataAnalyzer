@@ -1778,17 +1778,55 @@ class Airspeed2NMToOffshoreTouchdown(KeyPointValueNode):
 
 class AirspeedAbove500FtMin(KeyPointValueNode):
     '''
-    Minimum airspeed above 500ft AGL (helicopter only)
+    Minimum airspeed above 500ft AGL during standard approaches (helicopter only)
+    '''
+
+    units = ut.KT
+
+    can_operate = helicopter_only
+                                        
+    def derive(self, air_spd= P('Airspeed'), alt_agl=P('Altitude AGL For Flight Phases'),
+               approaches=App('Approach Information')):
+        
+        app_slices = []
+        for approach in approaches:
+            if approach.type in ['SHUTTLING','AIRBORNE_RADAR']:
+                app_slices.append(approach.slice)
+        
+        for alt_agl_slice in alt_agl.slices_above(500):
+            if any([slices_overlap(app_slice, alt_agl_slice) for app_slice in app_slices]):
+                continue
+            else:
+                self.create_kpv_from_slices(air_spd.array,[alt_agl_slice], min_value)
+                
+        print()
+                        
+        
+class AirspeedAbove500FtMinOffshoreSpecialProcedure(KeyPointValueNode):
+    '''
+    Minimum airspeed above 500ft AGL during a Shuttling Approach, ARDA
+    or AROA (helicopter only)
     '''
 
     units = ut.KT
 
     can_operate = helicopter_only
 
-    def derive(self, air_spd= P('Airspeed'), alt_agl=P('Altitude AGL For Flight Phases')):
-        self.create_kpvs_within_slices(air_spd.array,
-                                       alt_agl.slices_above(500), min_value)
-
+    def derive(self, air_spd= P('Airspeed'), alt_agl=P('Altitude AGL For Flight Phases'),
+               approaches=App('Approach Information')):
+        
+        app_slices = []
+        for approach in approaches:
+            if approach.type in ['SHUTTLING','AIRBORNE_RADAR']:
+                app_slices.append(approach.slice)
+        
+        for alt_agl_slice in alt_agl.slices_above(500):
+            for app_slice in app_slices:
+                if slices_overlap(app_slice, alt_agl_slice):
+                    self.create_kpv_from_slices(air_spd.array,[alt_agl_slice], min_value)
+                    
+        print()
+                
 
 class AirspeedAt200FtDuringOnshoreApproach(KeyPointValueNode):
     '''
@@ -2609,15 +2647,28 @@ class AirspeedMinusAirspeedSelectedFor3Sec500To20FtMax(KeyPointValueNode):
     '''
     Difference between IAS and selected airspeed during approach between 
     500 ft AAL and 20ft AAL.
+
+    For aircraft with 'Airspeed Selected (FMS)', this paramater will be used
+    instead of 'Airspeed Selected'.
     '''
 
     units = ut.KT
 
+    @classmethod
+    def can_operate(cls, available):
+        return all_of(('Altitude AAL For Flight Phases', 'HDF Duration'),
+                      available) and \
+               any_of(('Airspeed Minus Airspeed Selected For 3 Sec',
+                       'Airspeed Minus Airspeed Selected (FMS) For 3 Sec'),
+                      available)
+
     def derive(self,
-               spd_rel=P('Airspeed Minus Airspeed Selected For 3 Sec'),
+               spd_sel=P('Airspeed Minus Airspeed Selected For 3 Sec'),
+               spd_fms=P('Airspeed Minus Airspeed Selected (FMS) For 3 Sec'),
                alt_aal=P('Altitude AAL For Flight Phases'),
                duration=A('HDF Duration')):
 
+        spd_rel = spd_fms or spd_sel
         hdf_duration = duration.value * self.frequency if duration else None
         self.create_kpvs_within_slices(
             spd_rel.array,
@@ -2627,25 +2678,108 @@ class AirspeedMinusAirspeedSelectedFor3Sec500To20FtMax(KeyPointValueNode):
         )
 
 
-class AirspeedMinusAirspeedSelectedFor3Sec1000To500FtMax(KeyPointValueNode):
+class AirspeedMinusAirspeedSelectedFor3Sec500To20FtMin(KeyPointValueNode):
     '''
-    Difference between IAS and selected airspeed during approach for 3 sec 
-    between 1000 ft AAL and 500ft AAL.
+    Difference between IAS and selected airspeed during approach between 
+    500 ft AAL and 20ft AAL.
+
+    For aircraft with 'Airspeed Selected (FMS)', this paramater will be used
+    instead of 'Airspeed Selected'.
     '''
 
     units = ut.KT
 
+    @classmethod
+    def can_operate(cls, available):
+        return all_of(('Altitude AAL For Flight Phases', 'HDF Duration'),
+                      available) and \
+               any_of(('Airspeed Minus Airspeed Selected For 3 Sec',
+                       'Airspeed Minus Airspeed Selected (FMS) For 3 Sec'),
+                      available)
+
     def derive(self,
-               spd_rel=P('Airspeed Minus Airspeed Selected For 3 Sec'),
+               spd_sel=P('Airspeed Minus Airspeed Selected For 3 Sec'),
+               spd_fms=P('Airspeed Minus Airspeed Selected (FMS) For 3 Sec'),
                alt_aal=P('Altitude AAL For Flight Phases'),
                duration=A('HDF Duration')):
 
+        spd_rel = spd_fms or spd_sel
+        hdf_duration = duration.value * self.frequency if duration else None
+        self.create_kpvs_within_slices(
+            spd_rel.array,
+            trim_slices(alt_aal.slices_from_to(500, 20), 3, self.frequency,
+                        hdf_duration),
+            min_value,
+        )
+
+
+class AirspeedMinusAirspeedSelectedFor3Sec1000To500FtMax(KeyPointValueNode):
+    '''
+    Difference between IAS and selected airspeed during approach for 3 sec 
+    between 1000 ft AAL and 500ft AAL.
+
+    For aircraft with 'Airspeed Selected (FMS)', this paramater will be used
+    instead of 'Airspeed Selected'.
+    '''
+
+    units = ut.KT
+
+    @classmethod
+    def can_operate(cls, available):
+        return all_of(('Altitude AAL For Flight Phases', 'HDF Duration'),
+                      available) and \
+               any_of(('Airspeed Minus Airspeed Selected For 3 Sec',
+                       'Airspeed Minus Airspeed Selected (FMS) For 3 Sec'),
+                      available)
+
+    def derive(self,
+               spd_sel=P('Airspeed Minus Airspeed Selected For 3 Sec'),
+               spd_fms=P('Airspeed Minus Airspeed Selected (FMS) For 3 Sec'),
+               alt_aal=P('Altitude AAL For Flight Phases'),
+               duration=A('HDF Duration')):
+
+        spd_rel = spd_fms or spd_sel
         hdf_duration = duration.value * self.frequency if duration else None
         self.create_kpvs_within_slices(
             spd_rel.array,
             trim_slices(alt_aal.slices_from_to(1000, 500), 3, self.frequency,
                         hdf_duration),
             max_value,
+        )
+
+
+class AirspeedMinusAirspeedSelectedFor3Sec1000To500FtMin(KeyPointValueNode):
+    '''
+    Difference between IAS and selected airspeed during approach for 3 sec 
+    between 1000 ft AAL and 500ft AAL.
+
+    For aircraft with 'Airspeed Selected (FMS)', this paramater will be used
+    instead of 'Airspeed Selected'.
+    '''
+
+    units = ut.KT
+
+    @classmethod
+    def can_operate(cls, available):
+        return all_of(('Altitude AAL For Flight Phases', 'HDF Duration'),
+                      available) and \
+               any_of(('Airspeed Minus Airspeed Selected For 3 Sec',
+                       'Airspeed Minus Airspeed Selected (FMS) For 3 Sec'),
+                      available)
+
+    def derive(self,
+               spd_sel=P('Airspeed Minus Airspeed Selected For 3 Sec'),
+               spd_fms=P('Airspeed Minus Airspeed Selected (FMS) For 3 Sec'),
+               alt_aal=P('Altitude AAL For Flight Phases'),
+               duration=A('HDF Duration')):
+
+        spd_rel = spd_fms or spd_sel
+        hdf_duration = duration.value * self.frequency if duration else None
+        self.create_kpvs_within_slices(
+            spd_rel.array,
+            trim_slices(alt_aal.slices_from_to(1000, 500), 3, self.frequency,
+                        hdf_duration),
+            min_value,
         )
 
 
@@ -12201,28 +12335,63 @@ class HeadingDeviationFromRunwayDuringLandingRoll(KeyPointValueNode):
         self.create_kpv_from_slices(dev, [final_landing], max_abs_value)
 
 
-class HeadingVariation1_5NMTo1_0NMFromOffshoreTouchdownMax(KeyPointValueNode):
+class HeadingVariation1_5NMTo1_0NMFromOffshoreTouchdownMaxStandardApproach(KeyPointValueNode):
     '''
     Maximum heading variation (PTP) 1.5 to 1.0 NM from touchdown. (helicopter only)
     '''
 
     units = ut.DEGREE
 
-    name = 'Heading Variation 1.5 NM To 1.0 NM From Offshore Touchdown Max'
+    name = 'Heading Variation 1.5 NM To 1.0 NM From Offshore Touchdown Max Standard Approach'
 
     can_operate = helicopter_only
 
     def derive(self, heading=P('Heading Continuous'),
                dtts=KTI('Distance To Touchdown'),
-               offshore_twn=KTI('Offshore Touchdown')):
-        for tdwn in offshore_twn:
-            start_kti = dtts.get_previous(tdwn.index, name='1.5 NM To Touchdown')
-            stop_kti = dtts.get_previous(tdwn.index, name='1.0 NM To Touchdown')
-            if start_kti and stop_kti:
-                phase = slice(start_kti.index, stop_kti.index+1)
-                heading_delta = np.ma.ptp(heading.array[phase])
-                self.create_kpv(phase.stop-1, heading_delta)
+               offshore_twn=KTI('Offshore Touchdown'),
+               approaches=App('Approach Information')):
+        
+        for approach in approaches:
+            if approach.type in ['APPROACH', 'LANDING', 'GO_AROUND', 'TOUCH_AND_GO', 'RIG']:
+                for tdwn in offshore_twn:
+                    if is_index_within_slice(tdwn.index, slice(approach.slice.start, approach.slice.stop+10)):
+                        start_kti = dtts.get_previous(tdwn.index, name='1.5 NM To Touchdown')
+                        stop_kti = dtts.get_previous(tdwn.index, name='1.0 NM To Touchdown')
+                        if start_kti and stop_kti:
+                            phase = slice(start_kti.index, stop_kti.index+1)
+                            heading_delta = np.ma.ptp(heading.array[phase])
+                            self.create_kpv(phase.stop-1, heading_delta)
 
+
+class HeadingVariation1_5NMTo1_0NMFromOffshoreTouchdownMaxSpecialProcedure(KeyPointValueNode):
+    '''
+    Maximum heading variation (PTP) 1.5 to 1.0 NM from touchdown. (helicopter only)
+    '''
+
+    units = ut.DEGREE
+
+    name = 'Heading Variation 1.5 NM To 1.0 NM From Offshore Touchdown Max Special Procedure'
+
+    can_operate = helicopter_only
+
+    def derive(self, heading=P('Heading Continuous'),
+               dtts=KTI('Distance To Touchdown'),
+               offshore_twn=KTI('Offshore Touchdown'),
+               approaches=App('Approach Information')):
+        
+        for approach in approaches:
+            if approach.type in ['SHUTTLING', 'AIRBORNE_RADAR']:
+                for tdwn in offshore_twn:
+                    if is_index_within_slice(tdwn.index, slice(approach.slice.start, approach.slice.stop+10)):
+                        start_kti = dtts.get_previous(tdwn.index, name='1.5 NM To Touchdown')
+                        stop_kti = dtts.get_previous(tdwn.index, name='1.0 NM To Touchdown')
+                        if start_kti and stop_kti:
+                            phase = slice(start_kti.index, stop_kti.index+1)
+                            heading_delta = np.ma.ptp(heading.array[phase])
+                            self.create_kpv(phase.stop-1, heading_delta)
+                            
+        print()
+                                            
 
 class HeadingVariation300To50Ft(KeyPointValueNode):
     '''
@@ -13122,26 +13291,56 @@ class Groundspeed20SecToOffshoreTouchdownMax(KeyPointValueNode):
                                            stop_edge=tdwn.index))
 
 
-class Groundspeed0_8NMToOffshoreTouchdown(KeyPointValueNode):
+class Groundspeed0_8NMToOffshoreTouchdownSpecialProcedure(KeyPointValueNode):
     '''
-    Groundspeed at 0.8 NM away from an offshore touchdown. (helicopters only)
+    Groundspeed at 0.8 NM away from an offshore touchdown during a Shuttling Approach, 
+    ARDA or AROA. (helicopters only)
     '''
 
-    name = 'Groundspeed 0.8 NM To Offshore Touchdown'
+    name = 'Groundspeed 0.8 NM To Offshore Touchdown Special Procedure'
 
     units = ut.KT
 
     can_operate = helicopter_only
 
     def derive(self, groundspeed=P('Groundspeed'), 
-               dtts=KTI('Distance To Touchdown'), touchdown=KTI('Offshore Touchdown')):
-        #indices = [d.index for d in dtts if '0.8 NM To Touchdown' in d.name]
-        #for tdwn, index in zip(touchdown, indices):
-        #    self.create_kpv(index, value_at_index(groundspeed.array, index))
-        for tdwn in touchdown:
-            dist_to_touchdown = dtts.get_previous(tdwn.index, name='0.8 NM To Touchdown')
-            if dist_to_touchdown:
-                self.create_kpvs_at_ktis(groundspeed.array, [dist_to_touchdown])
+               dtts=KTI('Distance To Touchdown'), touchdown=KTI('Offshore Touchdown'),
+               approaches=App('Approach Information')):
+        
+        for approach in approaches:
+            if approach.type in ['SHUTTLING','AIRBORNE_RADAR']:
+                for tdwn in touchdown:
+                    if is_index_within_slice(tdwn.index, slice(approach.slice.start, approach.slice.stop+10)):
+                        dist_to_touchdown = dtts.get_previous(tdwn.index, name='0.8 NM To Touchdown')
+                        if dist_to_touchdown:
+                            self.create_kpvs_at_ktis(groundspeed.array, [dist_to_touchdown])
+                            
+        print()
+                                    
+        
+class Groundspeed0_8NMToOffshoreTouchdownStandardApproach(KeyPointValueNode):
+    '''
+    Groundspeed at 0.8 NM away from an offshore touchdown during a standard 
+    approach. (helicopters only)
+    '''
+
+    name = 'Groundspeed 0.8 NM To Offshore Touchdown Standard Approach'
+
+    units = ut.KT
+
+    can_operate = helicopter_only
+
+    def derive(self, groundspeed=P('Groundspeed'), 
+               dtts=KTI('Distance To Touchdown'), touchdown=KTI('Offshore Touchdown'),
+               approaches=App('Approach Information')):
+        
+        for approach in approaches:
+            if approach.type in ['APPROACH', 'LANDING', 'GO_AROUND', 'TOUCH_AND_GO', 'RIG']:
+                for tdwn in touchdown:
+                    if is_index_within_slice(tdwn.index, slice(approach.slice.start, approach.slice.stop+10)):
+                        dist_to_touchdown = dtts.get_previous(tdwn.index, name='0.8 NM To Touchdown')
+                        if dist_to_touchdown:
+                            self.create_kpvs_at_ktis(groundspeed.array, [dist_to_touchdown])
 
 
 class GroundspeedVacatingRunway(KeyPointValueNode):

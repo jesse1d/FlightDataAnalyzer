@@ -235,6 +235,8 @@ class Holding(FlightPhaseNode):
         # Three minutes should include two turn segments.
         turn_rate = rate_of_change(hdg, 3 * 60)
         for height_band in height_bands:
+            if height_band.start >= height_band.stop:
+                continue
             # We know turn rate will be positive because Heading Increasing only
             # increases.
             turn_bands = np.ma.clump_unmasked(
@@ -2133,3 +2135,25 @@ class TwoDegPitchTo35Ft(FlightPhaseNode):
                                     end=takeoff.stop_edge)
                 else:
                     self.warning('%s not created as slice less than 1 sample' % self.name)
+
+
+class ShuttlingApproach(FlightPhaseNode):
+    '''
+    Flight phase for the shuttling approach
+    '''
+    
+    def derive(self, approaches=App('Approach Information')):
+        for approach in approaches:
+            if approach.type == 'SHUTTLING':
+                self.create_section(approach.slice, name='Shuttling Approach')
+               
+                
+class AirborneRadarApproach(FlightPhaseNode):
+    '''
+    Flight phase for airborne radar approaches (ARDA/AROA)
+    '''
+    
+    def derive(self, approaches=App('Approach Information')):
+        for approach in approaches:
+            if approach.type == 'AIRBORNE_RADAR':
+                self.create_section(approach.slice, name='Airborne Radar Approach')

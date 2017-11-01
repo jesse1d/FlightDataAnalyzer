@@ -3329,7 +3329,7 @@ class Eng_VibN1Max(DerivedParameterNode):
                gear2=P('Eng (2) Vib N1 Gearbox')):
 
         params = eng1, eng2, eng3, eng4, fan1, fan2, fan3, fan4, lpt1, lpt2, lpt3, lpt4, comp1, comp2, gear1, gear2
-        engines = vstack_params_sw(8, *params)
+        engines = vstack_params(*params)
         self.array = np.ma.max(engines, axis=0)
         self.offset = offset_select('mean', params)
 
@@ -3366,7 +3366,7 @@ class Eng_VibN2Max(DerivedParameterNode):
                hpt4=P('Eng (4) Vib N2 Turbine')):
 
         params = eng1, eng2, eng3, eng4, hpc1, hpc2, hpt1, hpt2, hpt3, hpt4
-        engines = vstack_params_sw(8, *params)
+        engines = vstack_params(*params)
         self.array = np.ma.max(engines, axis=0)
         self.offset = offset_select('mean', params)
 
@@ -3401,7 +3401,7 @@ class Eng_VibN3Max(DerivedParameterNode):
                hpt4=P('Eng (4) Vib N3 Turbine')):
 
         params = eng1, eng2, eng3, eng4, hpt1, hpt2, hpt3, hpt4
-        engines = vstack_params_sw(8, *params)
+        engines = vstack_params(*params)
         self.array = np.ma.max(engines, axis=0)
         self.offset = offset_select('mean', params)
 
@@ -3449,7 +3449,7 @@ class Eng_VibBroadbandMax(DerivedParameterNode):
                   eng1_accel_a, eng2_accel_a, eng3_accel_a, eng4_accel_a,
                   eng1_accel_b, eng2_accel_b, eng3_accel_b, eng4_accel_b)
 
-        engines = vstack_params_sw(8, *params)
+        engines = vstack_params(*params)
         self.array = np.ma.max(engines, axis=0)
         self.offset = offset_select('mean', params)
 
@@ -3482,7 +3482,7 @@ class Eng_VibNpMax(DerivedParameterNode):
                gear2=P('Eng (2) Vib Np Gearbox')):
 
         params = eng1, eng2, fan1, fan2, lpt1, lpt2, comp1, comp2, gear1, gear2
-        engines = vstack_params_sw(8, *params)
+        engines = vstack_params(*params)
         self.array = np.ma.max(engines, axis=0)
         self.offset = offset_select('mean', params)
 
@@ -3512,7 +3512,7 @@ class Eng_VibAMax(DerivedParameterNode):
                eng4=P('Eng (4) Vib (A)')):
 
         params = eng1, eng2, eng3, eng4
-        engines = vstack_params_sw(8, *params)
+        engines = vstack_params(*params)
         self.array = np.ma.max(engines, axis=0)
         self.offset = offset_select('mean', params)
 
@@ -3543,7 +3543,7 @@ class Eng_VibBMax(DerivedParameterNode):
                eng4=P('Eng (4) Vib (B)')):
 
         params = eng1, eng2, eng3, eng4
-        engines = vstack_params_sw(8, *params)
+        engines = vstack_params(*params)
         self.array = np.ma.max(engines, axis=0)
         self.offset = offset_select('mean', params)
 
@@ -3574,7 +3574,7 @@ class Eng_VibCMax(DerivedParameterNode):
                eng4=P('Eng (4) Vib (C)')):
 
         params = eng1, eng2, eng3, eng4
-        engines = vstack_params_sw(8, *params)
+        engines = vstack_params(*params)
         self.array = np.ma.max(engines, axis=0)
         self.offset = offset_select('mean', params)
 
@@ -4942,7 +4942,7 @@ class CoordinatesSmoothed(object):
 
             if approach.type == 'LANDING':
                 runway = approach.landing_runway
-            elif approach.type == 'GO_AROUND':
+            elif approach.type == 'GO_AROUND' or approach.type == 'TOUCH_AND_GO':
                 runway = approach.approach_runway
             else:
                 raise ValueError('Unknown approach type')
@@ -5164,6 +5164,7 @@ class LatitudeSmoothed(DerivedParameterNode, CoordinatesSmoothed):
             self.array = track_linking(lat.array, lat_adj)
         else:
             self.array = lat.array
+            
 
 class LongitudeSmoothed(DerivedParameterNode, CoordinatesSmoothed):
     """
@@ -6718,13 +6719,19 @@ class Speedbrake(DerivedParameterNode):
                 ('Spoiler (L) (2)' in available and
                     'Spoiler (R) (2)' in available)
             ) or
-            family_name in ( 'A350' ) and (
+            family_name in ( 'A350', ) and (
                 'Spoiler (L) (4)' in available and
                 'Spoiler (R) (4)' in available
             ) or
-            family_name in ('B737 Classic', 'B737 NG') and (
+            family_name in ('B737 Classic',) and (
                 'Spoiler (L) (4)' in available and
                 'Spoiler (R) (4)' in available
+            ) or
+            family_name in ('B737 NG', 'B737 MAX') and (
+                ('Spoiler (L) (3)' in available and
+                    'Spoiler (R) (3)' in available) or
+                ('Spoiler (L) (4)' in available and
+                    'Spoiler (R) (4)' in available)
             ) or
             family_name == 'Global' and (
                 'Spoiler (L) (5)' in available and
@@ -6814,10 +6821,15 @@ class Speedbrake(DerivedParameterNode):
                 self.merge_spoiler(spoiler_l3, spoiler_r3)
             else:
                 self.merge_spoiler(spoiler_l2, spoiler_r2)
-        elif family_name in ('A350'):
+        elif family_name in ('A350',):
             self.merge_spoiler(spoiler_l4, spoiler_r4)
-        elif family_name in ('B737 Classic', 'B737 NG'):
+        elif family_name in ('B737 Classic',):
             self.merge_spoiler(spoiler_l4, spoiler_r4)
+        elif family_name in ('B737 NG', 'B737 MAX'):
+            if spoiler_l3 and spoiler_r3:
+                self.merge_spoiler(spoiler_l3, spoiler_r3)
+            else:
+                self.merge_spoiler(spoiler_l4, spoiler_r4)
         elif family_name == 'Global':
             self.merge_spoiler(spoiler_l5, spoiler_r5)
         elif family_name == 'B787':
@@ -8271,6 +8283,43 @@ class AirspeedMinusAirspeedSelectedFor3Sec(DerivedParameterNode):
 
 
 ########################################
+# Airspeed Minus Airspeed Selected (FMS)
+
+class AirspeedMinusAirspeedSelectedFMS(DerivedParameterNode):
+    '''
+    Airspeed relative to Airspeed Selected (FMS) during approach.
+    '''
+    units = ut.KT
+    name = 'Airspeed Minus Airspeed Selected (FMS)'
+
+    def derive(self,
+               airspeed=P('Airspeed'),
+               fms=P('Airspeed Selected (FMS)'),
+               approaches=S('Approach And Landing')):
+        # Prepare a zored, masked array based on the airspeed:
+        self.array = np_ma_masked_zeros_like(airspeed.array)
+
+        # Determine the section of flight where data must be valid:
+        phases = [approach.slice for approach in approaches]
+
+        for phase in phases:
+            self.array[phase] = airspeed.array[phase] - fms.array[phase]
+
+
+class AirspeedMinusAirspeedSelectedFMSFor3Sec(DerivedParameterNode):
+    '''
+    Airspeed relative to Airspeed Selected (FMS) over a 3 second window.
+    '''
+    align_frequency = 2
+    align_offset = 0
+    units = ut.KT
+    name = 'Airspeed Minus Airspeed Selected (FMS) For 3 Sec'
+
+    def derive(self, speed=P('Airspeed Minus Airspeed Selected (FMS)')):
+        self.array = second_window(speed.array, self.frequency, 3)
+
+
+########################################
 # Airspeed Minus V2
 
 
@@ -8751,3 +8800,73 @@ class AircraftEnergy(DerivedParameterNode):
     def derive(self, potential_energy=P('Potential Energy'),
                kinetic_energy=P('Kinetic Energy')):
         self.array = potential_energy.array + kinetic_energy.array
+
+
+class AltitudeADH(DerivedParameterNode):
+    '''
+    Altitude Above Deck Height
+
+    The rate of descent will differ between the radio and pressure calculations significantly for a period
+    as the aircraft comes over the deck. We test for these large differences and substitute the pressure rate
+    of descent for just those samples, then reconstruct the altitude trace by integrating the corrected differential.
+    '''
+    name = 'Altitude ADH'
+
+    units = ut.FT
+
+    def derive(self, rad=P('Altitude Radio'),
+               hdot=P('Vertical Speed'),
+               ):
+
+        def seek_deck(rad, hdot, min_idx):
+
+            def one_direction(rad, hdot, sence):
+                # Stairway to Heaven is getting a bit old. Getting with the times?
+                b_diffs = hdot/60
+                r_diffs = np.ma.ediff1d(rad, to_begin=b_diffs[0])
+                diffs = np.ma.where(np.ma.abs(r_diffs-b_diffs)>6.0, b_diffs, r_diffs)
+                height = integrate(diffs,
+                                   frequency=1.0,
+                                   direction=sence,
+                                   repair=False)
+                return height
+
+            height_from_rig = np_ma_masked_zeros_like(rad)
+            height_from_rig[:min_idx] = one_direction(rad[:min_idx], hdot[:min_idx], "backwards")
+            height_from_rig[min_idx:] = one_direction(rad[min_idx:], hdot[min_idx:], "forwards")
+
+            '''
+            # And we are bound to want to know the rig height somewhere, so here's how to work that out.
+            rig_height = rad[0]-height_from_rig[0]
+            # I checked this and it seems pretty consistent.
+            # See Library\Projects\Helicopter FDM\Algorithm Development\Rig height estimates from Bond initial test data.xlsx
+            #lat=hdf['Latitude'].array[app_slice][-1]
+            #lon=hdf['Longitude'].array[app_slice][-1]
+            #print(lat, lon, rig_height)
+            '''
+            return height_from_rig
+
+        self.array = np_ma_masked_zeros_like(rad.array)
+        rad_peak_idxs, rad_peak_vals = cycle_finder(rad.array, min_step=150.0)
+
+        if len(rad_peak_idxs)<4:
+            return
+
+        slice_idxs = zip(rad_peak_idxs[:-2], rad_peak_idxs[1:-1], rad_peak_idxs[2:], rad_peak_vals[1:])
+        for slice_idx in slice_idxs[1:-1]:
+            this_deck_slice = slice(slice_idx[0]+1, slice_idx[2]-1)
+            if slice_idx[3] > 5.0:
+                # We didn't land in this period
+                continue
+            else:
+                self.array[this_deck_slice] = seek_deck(rad.array[this_deck_slice],
+                                                        hdot.array[this_deck_slice],
+                                                        slice_idx[1]-slice_idx[0])
+                '''
+                import matplotlib.pyplot as plt
+                plt.plot(rad.array[this_deck_slice])
+                plt.plot(self.array[this_deck_slice])
+                plt.show()
+                plt.clf()
+                '''
+                

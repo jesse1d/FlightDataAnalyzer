@@ -16,6 +16,7 @@ import types
 import unittest
 import yaml
 
+from  collections import Counter
 from datetime import datetime
 from math import sqrt
 from mock import patch
@@ -6887,6 +6888,85 @@ class TestStraighten(unittest.TestCase):
         self.assertEqual(result[0], 86.0)
         result = straighten(np.ma.array([0.0]), np.ma.array([-200.0]), 45.0, False)
         self.assertEqual(result[0], -180.0)
+
+
+class TestSmoothSignal(unittest.TestCase):
+    def setUp(self):
+        signal = load(os.path.join(test_data_path, 'ae-1165-flap_angle.nod'))
+        _slices = runs_of_ones(np.logical_and(signal.array>=0.7,
+                                              signal.array<=2.3))
+        self.signal_to_smooth = signal.array[_slices[2]]
+
+    def test_smooth_signal_flat(self):
+        expected = [ 
+            0.9668, 0.9844, 1.0371, 1.0547, 1.0723, 1.125, 1.1953, 1.2656,
+            1.3359, 1.3887, 1.4238, 1.4766, 1.5469, 1.6172, 1.6875, 1.7402, 
+            1.7754, 1.8281, 1.8984, 1.9687, 2.039, 2.0918, 2.1094, 2.1269,         
+        ]
+        smoothed_signal = smooth_signal(self.signal_to_smooth, 
+                                        window_len=5, window='flat')
+        sig_rounded = [round(l,4) for l in smoothed_signal]
+        uniques = [i for i in sorted(Counter(sig_rounded))]
+        self.assertEqual(len(uniques), len(expected))
+        for u, e in zip(uniques, expected):
+            self.assertAlmostEqual(u, e, places=2)
+
+    def test_smooth_signal_hanning(self):
+        expected = [
+            0.8789, 0.9448, 1.0327, 1.0547, 1.0767, 1.1645, 1.2964, 1.3843,
+            1.4062, 1.4282, 1.5161, 1.6479, 1.7358, 1.7578, 1.7798, 1.8677,
+            1.9995, 2.0874, 2.1094, 2.1313,
+        ]
+        smoothed_signal = smooth_signal(self.signal_to_smooth, 
+                                        window_len=5, window='hanning')
+        sig_rounded = [round(l,4) for l in smoothed_signal]
+        uniques = [i for i in sorted(Counter(sig_rounded))]
+        self.assertEqual(len(uniques), len(expected))
+        for u, e in zip(uniques, expected):
+            self.assertAlmostEqual(u, e, places=2)
+
+    def test_smooth_signal_hamming(self):
+        expected = [
+            0.8946, 0.9487, 1.0241, 1.0515, 1.0547, 1.0578, 1.0853, 1.17,
+            1.2909, 1.3756, 1.4031, 1.4094, 1.4368, 1.5216, 1.6424, 1.7272,
+            1.7547, 1.7609, 1.7884, 1.8732, 1.994, 2.0788, 2.1062, 2.1094,
+            2.1125, 2.1305,
+        ]
+        smoothed_signal = smooth_signal(self.signal_to_smooth, 
+                                        window_len=5, window='hamming')
+        sig_rounded = [round(l,4) for l in smoothed_signal]
+        uniques = [i for i in sorted(Counter(sig_rounded))]
+        self.assertEqual(len(uniques), len(expected))
+        for u, e in zip(uniques, expected):
+            self.assertAlmostEqual(u, e, places=2)
+
+    def test_smooth_signal_bartlett(self):
+        expected = [
+            0.8789, 0.9448, 1.0327, 1.0547, 1.0767, 1.1645, 1.2964, 1.3843,
+            1.4062, 1.4282, 1.5161, 1.6479, 1.7358, 1.7578, 1.7798, 1.8677,
+            1.9995, 2.0874, 2.1094, 2.1313,
+        ]
+        smoothed_signal = smooth_signal(self.signal_to_smooth, 
+                                        window_len=5, window='bartlett')
+        sig_rounded = [round(l,4) for l in smoothed_signal]
+        uniques = [i for i in sorted(Counter(sig_rounded))]
+        self.assertEqual(len(uniques), len(expected))
+        for u, e in zip(uniques, expected):
+            self.assertAlmostEqual(u, e, places=2)
+
+    def test_smooth_signal_blackman(self):
+        expected = [
+            0.8622, 0.949, 1.0369, 1.0547, 1.0725, 1.1604, 1.3006, 1.3885,
+            1.4062, 1.424, 1.5119, 1.6521, 1.74, 1.7578, 1.7756, 1.8635,
+            2.0037, 2.0916, 2.1094, 2.1271,
+        ]
+        smoothed_signal = smooth_signal(self.signal_to_smooth, 
+                                        window_len=5, window='blackman')
+        sig_rounded = [round(l,4) for l in smoothed_signal]
+        uniques = [i for i in sorted(Counter(sig_rounded))]
+        self.assertEqual(len(uniques), len(expected))
+        for u, e in zip(uniques, expected):
+            self.assertAlmostEqual(u, e, places=2)
 
 
 class TestSmoothTrack(unittest.TestCase):

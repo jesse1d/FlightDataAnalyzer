@@ -74,6 +74,8 @@ from analysis_engine.derived_parameters import (
     AimingPointRange,
     AircraftEnergy,
     AirspeedMinusAirspeedSelectedFor3Sec,
+    AirspeedMinusAirspeedSelectedFMS,
+    AirspeedMinusAirspeedSelectedFMSFor3Sec,
     AirspeedMinusFlapManoeuvreSpeed,
     AirspeedMinusFlapManoeuvreSpeedFor3Sec,
     AirspeedMinusMinimumAirspeed,
@@ -93,6 +95,7 @@ from analysis_engine.derived_parameters import (
     AirspeedTrue,
     AltitudeAAL,
     AltitudeAALForFlightPhases,
+    AltitudeADH,
     AltitudeAGL,
     AltitudeDensity,
     AltitudeQNH,
@@ -1161,6 +1164,42 @@ class TestAltitudeAAL(unittest.TestCase):
         alt_aal = AltitudeAAL()
         alt_aal.derive(None, alt_std, fast, pitch, gog, helicopter)
 
+
+class TestAltitudeADH(unittest.TestCase):
+    def test_can_operate(self):
+        opts = AltitudeADH.get_operational_combinations()
+        self.assertEqual(opts, [('Altitude Radio', 'Vertical Speed')])
+
+    def test_adh_basic(self):
+        z = np.ma.arange(200)
+        height = P('Altitude Radio', np.ma.concatenate([z, z[:150:-1], z[50::-1], z[:50], z[150:], z[::-1]]))
+        hdot = P('Vertical Speed', np.ma.array([60]*200+[-60]*100+[60]*100+[-60]*200))
+        adh = AltitudeADH()
+        adh.derive(height, hdot)
+        # We confirm that the radio height was 100ft higher than the height above the deck.
+        self.assertEqual(height.array[210], 189.0)
+        self.assertEqual(adh.array[210], 89.0)
+
+    def test_adh_no_rig(self):
+        z = np.ma.arange(200)
+        height = P('Altitude Radio', np.ma.concatenate([z,z[::-1]]))
+        hdot = P('Vertical Speed', np.ma.array([60]*200+[-60]*200))
+        adh = AltitudeADH()
+        adh.derive(height, hdot)
+        # We confirm that the radio height was 100ft higher than the height above the deck.
+        self.assertEqual(np.ma.count(adh.array), 0)
+
+    def test_adh_two_rigs(self):
+        z = np.ma.arange(200)
+        height = P('Altitude Radio', np.ma.concatenate([
+            z, z[:150:-1], z[50::-1], z[:50], z[150:], z[:150:-1], z[100::-1], z[:100], z[150:], z[::-1]]))
+        hdot = P('Vertical Speed', np.ma.array(
+            [60]*200 + [-60]*100 + [60]*100 + [-60]*150 + [60]*150 + [-60]*200))
+        adh = AltitudeADH()
+        adh.derive(height, hdot)
+        self.assertEqual(height.array[210]-adh.array[210], 100.0)
+        self.assertEqual(height.array[680]-adh.array[680], 50.0)
+        
 
 class TestAimingPointRange(unittest.TestCase):
     def test_basic_scaling(self):
@@ -4129,29 +4168,26 @@ class TestAccelerationLateralOffsetRemoved(unittest.TestCase):
     
     def setUp(self):
         self.node_class = AccelerationLateralOffsetRemoved
-        self.acc_lateral=P('Acceleration Lateral', array=np.ma.array([1]*20 + [1.5]*20 + [1]*10), frequency=1.0)
+        self.acc_lateral=P('Acceleration Lateral', array=np.ma.array([0]*20 + [0.5]*20 + [0]*10), frequency=1.0)
     
     def test_can_operate(self):
         opts = AccelerationLateralOffsetRemoved.get_operational_combinations()
         self.assertEqual(opts, [('Acceleration Lateral',), ('Acceleration Lateral', 'Acceleration Lateral Offset')])
     
     def test_derive_positive_offset(self):
-        self.acc_lat_offset = KPV([KeyPointValue(index=0, value=1.2, name='Acceleration Lateral Offset')])
-        
+        self.acc_lat_offset = KPV([KeyPointValue(index=0, value=0.2, name='Acceleration Lateral Offset')])
         acc = AccelerationLateralOffsetRemoved()
         acc.derive(self.acc_lateral, self.acc_lat_offset)
         assert_array_equal(acc.array, self.acc_lateral.array - self.acc_lat_offset[0].value)
         
     def test_derive_negative_offset(self):
-        self.acc_lat_offset = KPV([KeyPointValue(index=0, value=-1.2, name='Acceleration Lateral Offset')])
-        
+        self.acc_lat_offset = KPV([KeyPointValue(index=0, value=-0.2, name='Acceleration Lateral Offset')])
         acc = AccelerationLateralOffsetRemoved()
         acc.derive(self.acc_lateral, self.acc_lat_offset)
         assert_array_equal(acc.array, self.acc_lateral.array - self.acc_lat_offset[0].value)        
         
     def test_derive_no_offset(self):
         self.acc_lat_offset = KPV([KeyPointValue(index=0, value=0.0, name='Acceleration Lateral Offset')])
-        
         acc = AccelerationLateralOffsetRemoved()
         acc.derive(self.acc_lateral, self.acc_lat_offset)
         assert_array_equal(acc.array, self.acc_lateral.array - self.acc_lat_offset[0].value)
@@ -4161,21 +4197,21 @@ class TestAccelerationLongitudinalOffsetRemoved(unittest.TestCase):
     
     def setUp(self):
         self.node_class = AccelerationLongitudinalOffsetRemoved
-        self.acc_long=P('Acceleration Longitudinal', array=np.ma.array([1]*20 + [1.5]*20 + [1]*10), frequency=1.0)
+        self.acc_long=P('Acceleration Longitudinal', array=np.ma.array([0]*20 + [0.5]*20 + [0]*10), frequency=1.0)
     
     def test_can_operate(self):
         opts = AccelerationLongitudinalOffsetRemoved.get_operational_combinations()
         self.assertEqual(opts, [('Acceleration Longitudinal', 'Acceleration Longitudinal Offset')])
     
     def test_derive_positive_offset(self):
-        self.acc_long_offset = KPV([KeyPointValue(index=0, value=1.2, name='Acceleration Longitudinal Offset')])
+        self.acc_long_offset = KPV([KeyPointValue(index=0, value=0.2, name='Acceleration Longitudinal Offset')])
         
         acc = AccelerationLongitudinalOffsetRemoved()
         acc.derive(self.acc_long, self.acc_long_offset)
         assert_array_equal(acc.array, self.acc_long.array - self.acc_long_offset[0].value)
         
     def test_derive_negative_offset(self):
-        self.acc_long_offset = KPV([KeyPointValue(index=0, value=-1.2, name='Acceleration Longitudinal Offset')])
+        self.acc_long_offset = KPV([KeyPointValue(index=0, value=-0.2, name='Acceleration Longitudinal Offset')])
         
         acc = AccelerationLongitudinalOffsetRemoved()
         acc.derive(self.acc_long, self.acc_long_offset)
@@ -5531,6 +5567,8 @@ class TestSpeedbrake(unittest.TestCase):
                                                family=A('Family', 'B737 Classic')))
         self.assertTrue(Speedbrake.can_operate(('Spoiler (L) (4)', 'Spoiler (R) (4)'),
                                                family=A('Family', 'B737 NG')))
+        self.assertTrue(Speedbrake.can_operate(('Spoiler (L) (3)', 'Spoiler (R) (3)'),
+                                                    family=A('Family', 'B737 MAX')))        
         self.assertTrue(Speedbrake.can_operate(('Spoiler (L) (3)', 'Spoiler (R) (3)'),
                                                family=A('Family', 'A320')))
         self.assertTrue(Speedbrake.can_operate(('Spoiler (L) (7)', 'Spoiler (R) (7)'),
@@ -7513,6 +7551,63 @@ class TestFlapManoeuvreSpeed(unittest.TestCase, NodeTest):
 
 ##############################################################################
 # Relative Airspeeds
+
+########################################
+# Airspeed Minus Airspeed Selected (FMS)
+
+
+class TestAirspeedMinusAirspeedSelectedFMS(unittest.TestCase):
+    def setUp(self):
+        self.node_class = AirspeedMinusAirspeedSelectedFMS
+        self.airspeed = P('Airspeed', np.ma.repeat(102, 2000))
+        self.air_sel = P('Airspeed Selected (FMS)', 
+                         np.ma.repeat((90, 120), 1000))
+        self.approaches = buildsection('Approach And Landing', 500, 999.5)
+        self.assertEqual(self.node_class.name,
+                         'Airspeed Minus Airspeed Selected (FMS)',)
+
+    def test_can_operate(self):
+        o = self.node_class.get_operational_combinations()
+        self.assertEqual([('Airspeed',
+                           'Airspeed Selected (FMS)',
+                           'Approach And Landing',)], o)
+
+    def test_derive(self):
+        node = self.node_class()
+        node.derive(self.airspeed, self.air_sel, self.approaches)
+        expected = np.ma.repeat((0, 12, 0, 0), 500)
+        expected[expected == 0] = np.ma.masked
+        ma_test.assert_masked_array_equal(node.array, expected)
+
+class TestAirspeedMinusAirspeedSelectedFMSFor3Sec(unittest.TestCase):
+    def setUp(self):
+        self.node_class = AirspeedMinusAirspeedSelectedFMSFor3Sec
+        self.airspeed = P(
+            'Airspeed Minus Airspeed Selected (FMS)',
+            array=np.ma.repeat((100, 110, 120, 100), (6, 7, 1, 6)),
+            frequency=2,
+        )
+        self.assertEqual(self.node_class.name,
+                         'Airspeed Minus Airspeed Selected (FMS) For 3 Sec',)
+
+    def test_can_operate(self):
+        o = self.node_class.get_operational_combinations()
+        self.assertEqual([('Airspeed Minus Airspeed Selected (FMS)',)], o)
+
+    def test_derive_basic(self):
+        node = self.node_class()
+        node.get_derived([self.airspeed])
+        expected = np.ma.repeat((100, 110, 100), (6, 8, 6))
+        expected[-6:] = np.ma.masked
+        ma_test.assert_masked_array_equal(node.array, expected)
+
+    def test_derive_align(self):
+        self.airspeed.frequency = 1
+        node = self.node_class()
+        node.get_derived([self.airspeed])
+        expected = np.ma.repeat((100, 105, 110, 100), (11, 1, 16, 12))
+        expected[-7:] = np.ma.masked
+        ma_test.assert_masked_array_equal(node.array, expected)
 
 
 ########################################
