@@ -804,8 +804,8 @@ class AccelerationNormalMinusLoadFactorThresholdAtTouchdown(KeyPointValueNode):
         B767-400     (ER)           None                                 158757
         Return the weight in KG when match is found else None
         '''
-        re_series = re.match(r'^B7[65]7-[234][05][0E]', series)
-        if not re_series:
+        re_series = re.match(r'^B7[365]7-[2346789][05][0E]', series)
+        if not re_series and series != 'B737-MAX-8':
             return None
         re_model = re.search(r'\((F|PF|PCF|ER)\)$', model)
         model_ending = re_model.group() if re_model else None
@@ -839,6 +839,22 @@ class AccelerationNormalMinusLoadFactorThresholdAtTouchdown(KeyPointValueNode):
             return 145149
         elif 'B767-400' in series and model_ending in ['(ER)',]:
             return 158757
+        elif 'B737-600' in series:
+            return 55205
+        elif 'B737-700' in series and 'Increased Gross Weight' in mods:
+            return 61389
+        elif 'B737-700' in series:
+            return 59190
+        elif 'B737-800' in series and 'Increased Gross Weight' in mods:
+            return 67025
+        elif 'B737-800' in series:
+            return 65970
+        elif 'B737-900' in series and model_ending in ['(ER)']:
+            return 72064
+        elif 'B737-900' in series:
+            return 67482
+        elif 'B737-MAX-8' in series:
+            return 70003
         else:
             return None
 
@@ -860,20 +876,30 @@ class AccelerationNormalMinusLoadFactorThresholdAtTouchdown(KeyPointValueNode):
                series=A('Series'),
                mods=A('Modifications'),
                touch_and_go=KTI('Touch And Go')):
+        
         mlw = self.get_landing_weight(series.value, model.value, mods.value)
         if not mlw:
             self.warning("Cannot determine landing weight. series:'%s' "
                          "model:'%s' mods:'%s'" % series.value, model.value,
                          mods.value)
             return
-        roll_repaired = repair_mask(roll.array, frequency=roll.frequency,
-                                    extrapolate=True, repair_duration=6)
-        weight_threshold = mlw + 1133.981  # 2500LB --> 1133.981KG
+        # roll_repaired = repair_mask(roll.array, frequency=roll.frequency,
+                                    # extrapolate=True, repair_duration=6)
+        ac_type = series.value[:4]
+        if ac_type == 'B767':
+            weight_threshold = mlw + 1133.981  # B767 manual: 2500LB --> 1133.981KG
+        elif ac_type == 'B757':
+            weight_threshold = mlw + 1133.981  # Based on B767 manual
+        elif ac_type == 'B737':
+            weight_threshold = mlw + 454.0 # B737 manual states 1000lb = 454kg.
+        
         freq_8hz = land_vert_acc.frequency == 8.0
         freq_16hz = land_vert_acc.frequency == 16.0
         for idx, tdwn in enumerate(tdwns+touch_and_go):
-            # not interested in direction of roll
-            roll_tdwn = abs(value_at_index(roll_repaired, tdwn.index))
+            # Find the maximum roll in the second prior to the touchdown.
+            scope = slice((tdwn.index - 1) * roll.frequency, 
+                                      (tdwn.index * roll.frequency) + 1)
+            roll_tdwn = np.max(abs(roll.array[scope]))
 
             gw_value = [k.value for k in gw_kpv if k.index == tdwn.index]
             if not gw_value:
@@ -885,23 +911,44 @@ class AccelerationNormalMinusLoadFactorThresholdAtTouchdown(KeyPointValueNode):
                 weight = gw_value[0]
 
             overweight = weight > weight_threshold
-            if not overweight and freq_16hz:
-                ld_factor_grph = np.ma.append(np.array([1.90, 1.90]),
-                                              np.linspace(1.90, 1.45, 5))
-            elif not overweight and freq_8hz:
-                ld_factor_grph = np.ma.append(np.array([1.80, 1.80]),
-                                              np.linspace(1.80, 1.40, 5))
-            elif overweight and freq_16hz:
-                ld_factor_grph = np.ma.append(np.array([1.55,]),
-                                              np.linspace(1.55, 1.29, 6))
-            elif overweight and freq_8hz:
-                ld_factor_grph = np.ma.append(np.array([1.50,]),
-                                              np.linspace(1.50, 1.25, 6))
+            
+            if ac_type in ['B757', 'B767']:
+                if not overweight and freq_16hz:
+                    ld_factor_grph = np.ma.append(np.array([1.90, 1.90]),
+                                                  np.linspace(1.90, 1.45, 5))
+                elif not overweight and freq_8hz:
+                    ld_factor_grph = np.ma.append(np.array([1.80, 1.80]),
+                                                  np.linspace(1.80, 1.40, 5))
+                elif overweight and freq_16hz:
+                    ld_factor_grph = np.ma.append(np.array([1.55,]),
+                                                  np.linspace(1.55, 1.29, 6))
+                elif overweight and freq_8hz:
+                    ld_factor_grph = np.ma.append(np.array([1.50,]),
+                                                  np.linspace(1.50, 1.25, 6))
+
+            elif ac_type in ['B737']:
+                if not overweight and freq_16hz:
+                    ld_factor_grph = np.ma.append(np.array([2.20, 2.20]),
+                                                  np.linspace(2.20, 1.60, 5))
+                elif not overweight and freq_8hz:
+                    ld_factor_grph = np.ma.append(np.array([2.10, 2.10]),
+                                                  np.linspace(2.10, 1.55, 5))
+                elif overweight and freq_16hz:
+                    ld_factor_grph = np.ma.append(np.array([1.85,]),
+                                                  np.linspace(1.85, 1.43, 6))
+                elif overweight and freq_8hz:
+                    ld_factor_grph = np.ma.append(np.array([1.80,]),
+                                                  np.linspace(1.80, 1.40, 6))
+
             else:
                 continue
+
             # Use roll_tdwn as the index for ld_factor_grph
             load_factor = value_at_index(ld_factor_grph, roll_tdwn,
                                          interpolate=True)
+            # At 6 deg the graph drops to zero. 
+            if roll_tdwn > 6.0:
+                load_factor = 0.0
             delta = land_vert_acc[idx].value - load_factor
             self.create_kpv(tdwn.index, delta)
 
