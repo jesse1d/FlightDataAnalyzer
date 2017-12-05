@@ -925,7 +925,6 @@ class AccelerationNormalMinusLoadFactorThresholdAtTouchdown(KeyPointValueNode):
                 elif overweight and freq_8hz:
                     ld_factor_grph = np.ma.append(np.array([1.50,]),
                                                   np.linspace(1.50, 1.25, 6))
-
             elif ac_type in ['B737']:
                 if not overweight and freq_16hz:
                     ld_factor_grph = np.ma.append(np.array([2.20, 2.20]),
@@ -939,7 +938,6 @@ class AccelerationNormalMinusLoadFactorThresholdAtTouchdown(KeyPointValueNode):
                 elif overweight and freq_8hz:
                     ld_factor_grph = np.ma.append(np.array([1.80,]),
                                                   np.linspace(1.80, 1.40, 6))
-
             else:
                 continue
 
