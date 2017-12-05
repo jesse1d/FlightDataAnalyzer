@@ -897,8 +897,9 @@ class AccelerationNormalMinusLoadFactorThresholdAtTouchdown(KeyPointValueNode):
         freq_16hz = land_vert_acc.frequency == 16.0
         for idx, tdwn in enumerate(tdwns+touch_and_go):
             # Find the maximum roll in the second prior to the touchdown.
-            scope = slice((tdwn.index - 1) * roll.frequency, 
-                                      (tdwn.index * roll.frequency) + 1)
+            ratio = roll.frequency / self.frequency
+            scope = slice((tdwn.index - 1) * ratio, 
+                                      (tdwn.index * ratio) + 1)
             roll_tdwn = np.max(abs(roll.array[scope]))
 
             gw_value = [k.value for k in gw_kpv if k.index == tdwn.index]
