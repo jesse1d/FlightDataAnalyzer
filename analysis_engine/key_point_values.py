@@ -776,10 +776,16 @@ class AccelerationNormalAtTouchdown(KeyPointValueNode):
 
 class AccelerationNormalMinusLoadFactorThresholdAtTouchdown(KeyPointValueNode):
     '''
-    A B767 specific KPV, which returns the difference between acceleration
-    normal at touchdown and load factor threshold based on roll and weight.
-    A positive value would indicate the amount over the load factor threshold
-    and therefore a hard landing.
+    A Boeing 767/757/737 specific KPV, which returns the difference between 
+    acceleration normal at touchdown and load factor threshold based on roll 
+    and weight. A positive value indicates the amount over the load factor 
+    threshold and therefore a hard landing which needs maintenance action.
+    
+    MM 05-51-01 HARD LANDING OR OVERWEIGHT/HARD LANDING OR HIGH DRAG OR HIGH 
+    SIDELOAD LANDING CONDITION - MAINTENANCE PRACTICES (CONDITIONAL INSPECTION)
+    
+    N.B. 737 and 767 manuals used to implement this algorithm. 
+    No 757 publication issued, so based on 767 MM graphs.
     '''
     units = ut.G
 
